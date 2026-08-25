@@ -5,10 +5,15 @@ import type { SafetyAlert, RiskLevel } from './safetyRules'
 import { checkSafety, hasBlockingAlert } from './safetyRules'
 
 interface SafetyAlertPanelProps {
-  selectedInstruments: string[]
-  selectedReagents: string[]
+  selectedInstruments?: string[]
+  selectedReagents?: string[]
   currentStepId?: string
   onAlertChange?: (alerts: SafetyAlert[]) => void
+  /** 受控模式：由 useSafetyGuard 传入评估结果，面板不再内部计算 */
+  alerts?: SafetyAlert[]
+  /** 受控模式：warning 级警告的勾选确认状态与回调 */
+  warningsAcknowledged?: boolean
+  onAcknowledgeWarnings?: (acknowledged: boolean) => void
 }
 
 const riskConfig: Record<RiskLevel, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string }> = {
@@ -37,26 +42,40 @@ export default function SafetyAlertPanel({
   selectedReagents,
   currentStepId,
   onAlertChange,
+  alerts: controlledAlerts,
+  warningsAcknowledged = false,
+  onAcknowledgeWarnings,
 }: SafetyAlertPanelProps) {
-  const [alerts, setAlerts] = useState<SafetyAlert[]>([])
+  const isControlled = controlledAlerts !== undefined
+  const [internalAlerts, setInternalAlerts] = useState<SafetyAlert[]>([])
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
 
   useEffect(() => {
+    if (isControlled) return
+
     const context = {
-      selectedInstruments,
-      selectedReagents,
+      selectedInstruments: selectedInstruments ?? [],
+      selectedReagents: selectedReagents ?? [],
       currentStepId,
     }
 
     const newAlerts = checkSafety(context)
     const filteredAlerts = newAlerts.filter(a => !dismissedAlerts.has(a.id))
-    
-    setAlerts(filteredAlerts)
-    
+
+    setInternalAlerts(filteredAlerts)
+
     if (onAlertChange) {
       onAlertChange(filteredAlerts)
     }
-  }, [selectedInstruments, selectedReagents, currentStepId, dismissedAlerts, onAlertChange])
+  }, [isControlled, selectedInstruments, selectedReagents, currentStepId, dismissedAlerts, onAlertChange])
+
+  const alerts = isControlled
+    ? controlledAlerts.filter(a => !dismissedAlerts.has(a.id))
+    : internalAlerts
+
+  const warningAlerts = alerts.filter(a => a.riskLevel === 'warning')
+  // warning 级需勾选确认后才放行，确认前不允许关闭
+  const requireAcknowledgment = isControlled && onAcknowledgeWarnings !== undefined
 
   const dismissAlert = (alertId: string) => {
     setDismissedAlerts(prev => new Set([...prev, alertId]))
@@ -131,7 +150,7 @@ export default function SafetyAlertPanel({
                   </p>
                 </div>
 
-                {!alert.blocking && (
+                {!alert.blocking && !(requireAcknowledgment && alert.riskLevel === 'warning') && (
                   <button
                     onClick={() => dismissAlert(alert.id)}
                     className={`flex-shrink-0 p-1 rounded-lg ${config.color} hover:bg-white/50 transition-colors`}
@@ -144,6 +163,21 @@ export default function SafetyAlertPanel({
           )
         })}
       </AnimatePresence>
+
+      {/* Warning 级确认：勾选「已阅读并理解」后才放行 */}
+      {requireAcknowledgment && warningAlerts.length > 0 && (
+        <label className="flex items-center gap-2 px-4 py-3 bg-warning-light border border-warning rounded-xl cursor-pointer">
+          <input
+            type="checkbox"
+            checked={warningsAcknowledged}
+            onChange={(e) => onAcknowledgeWarnings?.(e.target.checked)}
+            className="w-4 h-4 accent-amber-500"
+          />
+          <span className="text-sm font-medium text-warning-dark">
+            已阅读并理解上述安全警告
+          </span>
+        </label>
+      )}
     </div>
   )
 }
