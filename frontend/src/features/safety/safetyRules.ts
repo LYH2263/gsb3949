@@ -9,6 +9,9 @@ export interface SafetyRule {
     type: 'incompatible_reagents' | 'wrong_order' | 'missing_instrument' | 'wrong_heating' | 'excess_reagent'
     reagentIds?: string[]
     instrumentIds?: string[]
+    // 顺序/操作类风险只能在学生真正执行该操作时判定，此处声明所需动作。
+    // 仅选择试剂或器材、未执行该动作时不触发，避免误报。
+    requiresAction?: string
     condition?: (context: SafetyContext) => boolean
   }
   message: string
@@ -20,7 +23,10 @@ export interface SafetyContext {
   selectedInstruments: string[]
   selectedReagents: string[]
   currentStepId?: string
+  // 学生当前触发的操作，如点燃/验纯（'ignite'）。仅选择试剂时为空。
   action?: string
+  // 点燃前是否已完成验纯。
+  purityVerified?: boolean
 }
 
 export interface SafetyAlert {
@@ -43,6 +49,8 @@ export const safetyRules: SafetyRule[] = [
     trigger: {
       type: 'wrong_order',
       reagentIds: ['h2so4-dilute', 'hcl-dilute'],
+      // 仅在学生执行稀释操作时判定，避免选中酸就误报。
+      requiresAction: 'dilute',
     },
     message: '⚠️ 危险操作：稀释浓酸时顺序错误',
     suggestion: '稀释浓酸时必须将酸缓慢加入水中，并不断搅拌。绝对禁止将水倒入浓酸中！',
@@ -69,6 +77,9 @@ export const safetyRules: SafetyRule[] = [
     trigger: {
       type: 'wrong_order',
       reagentIds: ['zinc', 'h2so4-dilute'],
+      // 仅在学生点击「点燃/验纯」且尚未验纯时判定，仅选择试剂不触发。
+      requiresAction: 'ignite',
+      condition: (ctx) => !ctx.purityVerified,
     },
     message: '⚠️ 危险操作：未验纯就点燃氢气',
     suggestion: '点燃氢气前必须先检验纯度，防止爆炸。收集一小试管气体，靠近火焰听声音',
@@ -146,10 +157,12 @@ export function checkSafety(context: SafetyContext): SafetyAlert[] {
 
   for (const rule of safetyRules) {
     const triggered = checkRule(rule, context)
-    
+
     if (triggered) {
       alerts.push({
-        id: `${rule.id}-${Date.now()}`,
+        // 使用稳定 id（基于 ruleId），便于按步骤跟踪确认/忽略状态，
+        // 避免每次评估都生成新 id 导致勾选状态丢失。
+        id: `alert-${rule.id}`,
         ruleId: rule.id,
         riskLevel: rule.riskLevel,
         message: rule.message,
@@ -167,48 +180,56 @@ export function checkSafety(context: SafetyContext): SafetyAlert[] {
 function checkRule(rule: SafetyRule, context: SafetyContext): boolean {
   const { trigger } = rule
 
+  // 操作门控：声明了 requiresAction 的规则只在学生真正执行该操作时判定，
+  // 仅选择试剂/器材不触发（例如氢气验纯只在点击「点燃/验纯」时判定）。
+  if (trigger.requiresAction && context.action !== trigger.requiresAction) {
+    return false
+  }
+
+  let matched = false
+
   switch (trigger.type) {
     case 'incompatible_reagents':
       if (trigger.reagentIds) {
-        return trigger.reagentIds.every(id => context.selectedReagents.includes(id))
+        matched = trigger.reagentIds.every(id => context.selectedReagents.includes(id))
       }
       break
 
     case 'wrong_order':
-      // 简化检查：如果存在指定试剂就触发
+      // 需要指定试剂全部就位才可能构成该顺序风险。
       if (trigger.reagentIds) {
-        return trigger.reagentIds.some(id => context.selectedReagents.includes(id))
-      }
-      if (trigger.instrumentIds) {
-        return trigger.instrumentIds.some(id => context.selectedInstruments.includes(id))
+        matched = trigger.reagentIds.every(id => context.selectedReagents.includes(id))
+      } else if (trigger.instrumentIds) {
+        matched = trigger.instrumentIds.some(id => context.selectedInstruments.includes(id))
       }
       break
 
     case 'missing_instrument':
       if (trigger.instrumentIds) {
-        // 如果使用了指定器材但没有配套的安全器材
-        const hasInstrument = trigger.instrumentIds.some(id => 
+        matched = trigger.instrumentIds.some(id =>
           context.selectedInstruments.includes(id)
         )
-        return hasInstrument
       }
       break
 
     case 'wrong_heating':
       if (trigger.instrumentIds) {
-        return trigger.instrumentIds.some(id => 
+        matched = trigger.instrumentIds.some(id =>
           context.selectedInstruments.includes(id)
         )
       }
       break
 
     default:
-      if (trigger.condition) {
-        return trigger.condition(context)
-      }
+      break
   }
 
-  return false
+  // 附加条件（如「尚未验纯」）需同时满足。
+  if (matched && trigger.condition) {
+    return trigger.condition(context)
+  }
+
+  return matched
 }
 
 // 获取最高风险等级

@@ -1,9 +1,11 @@
 import { useParams, Navigate } from 'react-router-dom'
 import { useState, useMemo } from 'react'
-import { FlaskConical, Beaker, AlertTriangle, Play, RotateCcw } from 'lucide-react'
+import { FlaskConical, Beaker, AlertTriangle, Play, RotateCcw, Flame, ShieldCheck } from 'lucide-react'
 import InstrumentPanel from '../features/instruments/InstrumentPanel'
 import ReagentPanel from '../features/reagents/ReagentPanel'
 import StepGuide from '../features/experiment-flow/StepGuide'
+import SafetyAlertPanel from '../features/safety/SafetyAlertPanel'
+import { useSafetyGuard } from '../features/safety/useSafetyGuard'
 import { useExperimentFlow } from '../features/experiment-flow/useExperimentFlow'
 import { useBackendExperimentRecorder } from '../features/records/useBackendExperimentRecorder'
 import { experimentStepsMap } from '../data/experimentSteps'
@@ -62,6 +64,17 @@ export default function LabWorkbenchPage() {
     title: experimentTitle,
     totalSteps: experimentSteps.length || 1,
   })
+
+  // 安全评估与放行判定统一收敛到 useSafetyGuard，页面只负责接线。
+  const currentStepId = steps[currentStepIndex]?.id
+  const safety = useSafetyGuard({
+    selectedInstruments: selectedInstruments.map((i) => i.id),
+    selectedReagents: selectedReagents.map((r) => r.id),
+    currentStepId,
+  })
+
+  // 综合放行：既满足步骤器材/试剂要求，又通过安全放行判定。
+  const safeCanProceed = canProceed && safety.canProceed
 
   if (!experimentId) {
     return <Navigate to="/" />
@@ -170,6 +183,16 @@ export default function LabWorkbenchPage() {
       return
     }
 
+    // 安全放行判定：danger 阻断、warning 未确认时不放行。
+    if (!safety.canProceed) {
+      addToast({
+        type: 'warning',
+        title: '存在未处理的安全警告',
+        message: '请先处理高危操作或勾选「已阅读并理解」后再继续',
+      })
+      return
+    }
+
     const isLastStep = currentStepIndex === steps.length - 1
 
     if (isRecording) {
@@ -206,6 +229,35 @@ export default function LabWorkbenchPage() {
   }
 
   const currentStep = steps[currentStepIndex]
+
+  // 学生点击「点燃/验纯」时才判定氢气验纯类风险，仅选择试剂不触发。
+  const handleIgnite = () => {
+    const result = safety.triggerAction('ignite')
+    const blocked = result.some((a) => a.blocking || a.riskLevel === 'danger')
+    if (blocked) {
+      addToast({
+        type: 'error',
+        title: '危险操作已拦截',
+        message: '点燃前必须先验纯，请先完成氢气验纯',
+      })
+      return
+    }
+    addToast({
+      type: 'success',
+      title: '点燃成功',
+      message: '氢气已安全点燃',
+    })
+  }
+
+  const handleVerifyPurity = () => {
+    safety.markPurityVerified()
+    safety.clearAction()
+    addToast({
+      type: 'success',
+      title: '验纯完成',
+      message: '氢气已验纯，可安全点燃',
+    })
+  }
 
   return (
     <div className="min-h-[calc(100vh-8rem)] bg-slate-50">
@@ -377,10 +429,53 @@ export default function LabWorkbenchPage() {
                 currentStepIndex={currentStepIndex}
                 onNext={handleNextStep}
                 onPrev={prevStep}
-                canProceed={canProceed}
+                canProceed={safeCanProceed}
                 canGoBack={canGoBack}
                 isComplete={isComplete}
               />
+            )}
+
+            {/* 实时安全预警：选器材/试剂或切步时即时刷新，复用 SafetyAlertPanel */}
+            {isExperimentRunning && (
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="p-4 border-b border-slate-200 bg-slate-50">
+                  <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-primary-600" />
+                    安全预警
+                  </h3>
+                </div>
+                <div className="p-4 space-y-4">
+                  <SafetyAlertPanel
+                    alerts={safety.alerts}
+                    hasBlocking={safety.hasBlocking}
+                    acknowledgedIds={safety.acknowledgedIds}
+                    onToggleAcknowledge={safety.toggleAcknowledge}
+                    onDismiss={safety.dismissAlert}
+                  />
+
+                  {/* 金属与酸实验：点燃/验纯为显式操作，仅点击时判定验纯风险 */}
+                  {experimentId === 'metal-acid-reaction' && (
+                    <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={handleVerifyPurity}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                        氢气验纯
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleIgnite}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-warning text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                      >
+                        <Flame className="w-4 h-4" />
+                        点燃
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             <ReagentPanel
