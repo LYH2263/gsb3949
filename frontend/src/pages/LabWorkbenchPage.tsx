@@ -4,6 +4,8 @@ import { FlaskConical, Beaker, AlertTriangle, Play, RotateCcw } from 'lucide-rea
 import InstrumentPanel from '../features/instruments/InstrumentPanel'
 import ReagentPanel from '../features/reagents/ReagentPanel'
 import StepGuide from '../features/experiment-flow/StepGuide'
+import SafetyAlertPanel from '../features/safety/SafetyAlertPanel'
+import { useSafetyGuard, hasHydrogenReactionSetup } from '../features/safety/useSafetyGuard'
 import { useExperimentFlow } from '../features/experiment-flow/useExperimentFlow'
 import { useBackendExperimentRecorder } from '../features/records/useBackendExperimentRecorder'
 import { experimentStepsMap } from '../data/experimentSteps'
@@ -51,6 +53,23 @@ export default function LabWorkbenchPage() {
     selectedInstruments: selectedInstruments.map((i) => i.id),
     selectedReagents: selectedReagents.map((r) => r.id),
   })
+
+  const {
+    alerts: safetyAlerts,
+    canProceed: safetyCanProceed,
+    warningsAcknowledged,
+    acknowledgeWarnings,
+    verifyHydrogenPurity,
+    performAction,
+    hydrogenPurityVerified,
+  } = useSafetyGuard({
+    selectedInstruments: selectedInstruments.map((i) => i.id),
+    selectedReagents: selectedReagents.map((r) => r.id),
+    currentStepId: steps[currentStepIndex]?.id,
+  })
+
+  const showHydrogenActions =
+    isExperimentRunning && hasHydrogenReactionSetup(selectedReagents.map((r) => r.id))
 
   const {
     isRecording,
@@ -166,6 +185,10 @@ export default function LabWorkbenchPage() {
     const step = steps[currentStepIndex]
     if (!step) return
 
+    if (!safetyCanProceed) {
+      return
+    }
+
     if (!validateStep()) {
       return
     }
@@ -202,6 +225,32 @@ export default function LabWorkbenchPage() {
           message: '实验已完成，但记录状态未同步，请刷新记录页检查',
         })
       }
+    }
+  }
+
+  const handleVerifyPurity = () => {
+    verifyHydrogenPurity()
+    addToast({
+      type: 'success',
+      title: '验纯完成',
+      message: '氢气纯净，可以安全点燃',
+    })
+  }
+
+  const handleIgnite = () => {
+    performAction('ignite')
+    if (hydrogenPurityVerified) {
+      addToast({
+        type: 'success',
+        title: '点燃成功',
+        message: '氢气安静地燃烧，产生淡蓝色火焰',
+      })
+    } else {
+      addToast({
+        type: 'error',
+        title: '危险操作',
+        message: '未验纯就点燃氢气，已触发安全警告',
+      })
     }
   }
 
@@ -358,6 +407,24 @@ export default function LabWorkbenchPage() {
                       </div>
                     )}
 
+                    {showHydrogenActions && (
+                      <div className="flex items-center gap-3 pt-2">
+                        <button
+                          onClick={handleVerifyPurity}
+                          disabled={hydrogenPurityVerified}
+                          className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {hydrogenPurityVerified ? '已验纯' : '氢气验纯'}
+                        </button>
+                        <button
+                          onClick={handleIgnite}
+                          className="px-4 py-2 bg-danger text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                        >
+                          点燃氢气
+                        </button>
+                      </div>
+                    )}
+
                     {isComplete && (
                       <div className="mt-6 p-4 bg-success-light rounded-xl border border-success">
                         <p className="text-success-dark font-medium">实验完成</p>
@@ -371,13 +438,19 @@ export default function LabWorkbenchPage() {
           </div>
 
           <div className="lg:col-span-4 space-y-6">
+            <SafetyAlertPanel
+              alerts={safetyAlerts}
+              warningsAcknowledged={warningsAcknowledged}
+              onAcknowledgeWarnings={acknowledgeWarnings}
+            />
+
             {isExperimentRunning && (
               <StepGuide
                 steps={steps}
                 currentStepIndex={currentStepIndex}
                 onNext={handleNextStep}
                 onPrev={prevStep}
-                canProceed={canProceed}
+                canProceed={canProceed && safetyCanProceed}
                 canGoBack={canGoBack}
                 isComplete={isComplete}
               />

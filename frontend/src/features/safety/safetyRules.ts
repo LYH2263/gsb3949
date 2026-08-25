@@ -21,6 +21,7 @@ export interface SafetyContext {
   selectedReagents: string[]
   currentStepId?: string
   action?: string
+  hydrogenPurityVerified?: boolean
 }
 
 export interface SafetyAlert {
@@ -43,6 +44,11 @@ export const safetyRules: SafetyRule[] = [
     trigger: {
       type: 'wrong_order',
       reagentIds: ['h2so4-dilute', 'hcl-dilute'],
+      // 仅在学生执行稀释动作时判定，仅选择试剂不得触发
+      condition: (context) =>
+        context.action === 'dilute' &&
+        (context.selectedReagents.includes('h2so4-dilute') ||
+          context.selectedReagents.includes('hcl-dilute')),
     },
     message: '⚠️ 危险操作：稀释浓酸时顺序错误',
     suggestion: '稀释浓酸时必须将酸缓慢加入水中，并不断搅拌。绝对禁止将水倒入浓酸中！',
@@ -69,6 +75,16 @@ export const safetyRules: SafetyRule[] = [
     trigger: {
       type: 'wrong_order',
       reagentIds: ['zinc', 'h2so4-dilute'],
+      // 仅在学生点击「点燃」动作时判定，仅选择试剂不得误报
+      condition: (context) => {
+        if (context.action !== 'ignite') return false
+        if (context.hydrogenPurityVerified) return false
+        const hasZinc = context.selectedReagents.includes('zinc')
+        const hasAcid =
+          context.selectedReagents.includes('h2so4-dilute') ||
+          context.selectedReagents.includes('hcl-dilute')
+        return hasZinc && hasAcid
+      },
     },
     message: '⚠️ 危险操作：未验纯就点燃氢气',
     suggestion: '点燃氢气前必须先检验纯度，防止爆炸。收集一小试管气体，靠近火焰听声音',
@@ -167,6 +183,11 @@ export function checkSafety(context: SafetyContext): SafetyAlert[] {
 function checkRule(rule: SafetyRule, context: SafetyContext): boolean {
   const { trigger } = rule
 
+  // 带条件判定的规则优先按条件触发（用于动作级判定，避免选择即误报）
+  if (trigger.condition) {
+    return trigger.condition(context)
+  }
+
   switch (trigger.type) {
     case 'incompatible_reagents':
       if (trigger.reagentIds) {
@@ -201,11 +222,6 @@ function checkRule(rule: SafetyRule, context: SafetyContext): boolean {
         )
       }
       break
-
-    default:
-      if (trigger.condition) {
-        return trigger.condition(context)
-      }
   }
 
   return false
