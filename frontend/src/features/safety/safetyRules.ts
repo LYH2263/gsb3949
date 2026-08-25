@@ -6,7 +6,7 @@ export interface SafetyRule {
   description: string
   riskLevel: RiskLevel
   trigger: {
-    type: 'incompatible_reagents' | 'wrong_order' | 'missing_instrument' | 'wrong_heating' | 'excess_reagent'
+    type: 'incompatible_reagents' | 'wrong_order' | 'missing_instrument' | 'wrong_heating' | 'excess_reagent' | 'ignition_without_purity_check'
     reagentIds?: string[]
     instrumentIds?: string[]
     condition?: (context: SafetyContext) => boolean
@@ -21,6 +21,7 @@ export interface SafetyContext {
   selectedReagents: string[]
   currentStepId?: string
   action?: string
+  purityChecked?: boolean
 }
 
 export interface SafetyAlert {
@@ -43,6 +44,7 @@ export const safetyRules: SafetyRule[] = [
     trigger: {
       type: 'wrong_order',
       reagentIds: ['h2so4-dilute', 'hcl-dilute'],
+      condition: (ctx) => ctx.action === 'dilute_acid',
     },
     message: '⚠️ 危险操作：稀释浓酸时顺序错误',
     suggestion: '稀释浓酸时必须将酸缓慢加入水中，并不断搅拌。绝对禁止将水倒入浓酸中！',
@@ -67,8 +69,9 @@ export const safetyRules: SafetyRule[] = [
     description: '点燃可燃气体前必须验纯',
     riskLevel: 'danger',
     trigger: {
-      type: 'wrong_order',
+      type: 'ignition_without_purity_check',
       reagentIds: ['zinc', 'h2so4-dilute'],
+      condition: (ctx) => ctx.action === 'ignite' && !ctx.purityChecked,
     },
     message: '⚠️ 危险操作：未验纯就点燃氢气',
     suggestion: '点燃氢气前必须先检验纯度，防止爆炸。收集一小试管气体，靠近火焰听声音',
@@ -146,10 +149,10 @@ export function checkSafety(context: SafetyContext): SafetyAlert[] {
 
   for (const rule of safetyRules) {
     const triggered = checkRule(rule, context)
-    
+
     if (triggered) {
       alerts.push({
-        id: `${rule.id}-${Date.now()}`,
+        id: rule.id,
         ruleId: rule.id,
         riskLevel: rule.riskLevel,
         message: rule.message,
@@ -167,48 +170,51 @@ export function checkSafety(context: SafetyContext): SafetyAlert[] {
 function checkRule(rule: SafetyRule, context: SafetyContext): boolean {
   const { trigger } = rule
 
+  if (trigger.condition && !trigger.condition(context)) {
+    return false
+  }
+
   switch (trigger.type) {
     case 'incompatible_reagents':
       if (trigger.reagentIds) {
         return trigger.reagentIds.every(id => context.selectedReagents.includes(id))
       }
-      break
+      return false
 
     case 'wrong_order':
-      // 简化检查：如果存在指定试剂就触发
       if (trigger.reagentIds) {
         return trigger.reagentIds.some(id => context.selectedReagents.includes(id))
       }
       if (trigger.instrumentIds) {
         return trigger.instrumentIds.some(id => context.selectedInstruments.includes(id))
       }
-      break
+      return false
 
     case 'missing_instrument':
       if (trigger.instrumentIds) {
-        // 如果使用了指定器材但没有配套的安全器材
-        const hasInstrument = trigger.instrumentIds.some(id => 
+        return trigger.instrumentIds.some(id =>
           context.selectedInstruments.includes(id)
         )
-        return hasInstrument
       }
-      break
+      return false
 
     case 'wrong_heating':
       if (trigger.instrumentIds) {
-        return trigger.instrumentIds.some(id => 
+        return trigger.instrumentIds.some(id =>
           context.selectedInstruments.includes(id)
         )
       }
-      break
+      return false
+
+    case 'ignition_without_purity_check':
+      return (
+        context.selectedReagents.includes('zinc') &&
+        context.selectedReagents.some(id => id === 'h2so4-dilute' || id === 'hcl-dilute')
+      )
 
     default:
-      if (trigger.condition) {
-        return trigger.condition(context)
-      }
+      return false
   }
-
-  return false
 }
 
 // 获取最高风险等级
