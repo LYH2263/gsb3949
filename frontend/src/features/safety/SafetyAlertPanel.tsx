@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, X, Shield, Info } from 'lucide-react'
 import type { SafetyAlert, RiskLevel } from './safetyRules'
-import { checkSafety, hasBlockingAlert } from './safetyRules'
+import { hasBlockingAlert } from './safetyRules'
 
 interface SafetyAlertPanelProps {
-  selectedInstruments: string[]
-  selectedReagents: string[]
-  currentStepId?: string
-  onAlertChange?: (alerts: SafetyAlert[]) => void
+  alerts: SafetyAlert[]
+  acknowledgedIds: Set<string>
+  onAcknowledge: (ruleId: string) => void
+  onDismiss: (ruleId: string) => void
 }
 
 const riskConfig: Record<RiskLevel, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string }> = {
@@ -33,35 +32,11 @@ const riskConfig: Record<RiskLevel, { icon: React.ReactNode; color: string; bgCo
 }
 
 export default function SafetyAlertPanel({
-  selectedInstruments,
-  selectedReagents,
-  currentStepId,
-  onAlertChange,
+  alerts,
+  acknowledgedIds,
+  onAcknowledge,
+  onDismiss,
 }: SafetyAlertPanelProps) {
-  const [alerts, setAlerts] = useState<SafetyAlert[]>([])
-  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    const context = {
-      selectedInstruments,
-      selectedReagents,
-      currentStepId,
-    }
-
-    const newAlerts = checkSafety(context)
-    const filteredAlerts = newAlerts.filter(a => !dismissedAlerts.has(a.id))
-    
-    setAlerts(filteredAlerts)
-    
-    if (onAlertChange) {
-      onAlertChange(filteredAlerts)
-    }
-  }, [selectedInstruments, selectedReagents, currentStepId, dismissedAlerts, onAlertChange])
-
-  const dismissAlert = (alertId: string) => {
-    setDismissedAlerts(prev => new Set([...prev, alertId]))
-  }
-
   if (alerts.length === 0) {
     return (
       <div className="bg-success-light border border-success rounded-xl p-4 flex items-center gap-3">
@@ -93,7 +68,8 @@ export default function SafetyAlertPanel({
       <AnimatePresence>
         {alerts.map((alert) => {
           const config = riskConfig[alert.riskLevel]
-          
+          const isAcknowledged = acknowledgedIds.has(alert.ruleId)
+
           return (
             <motion.div
               key={alert.id}
@@ -106,12 +82,12 @@ export default function SafetyAlertPanel({
                 <div className={`${config.color} flex-shrink-0 mt-0.5`}>
                   {config.icon}
                 </div>
-                
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      alert.riskLevel === 'danger' 
-                        ? 'bg-danger text-white' 
+                      alert.riskLevel === 'danger'
+                        ? 'bg-danger text-white'
                         : alert.riskLevel === 'warning'
                         ? 'bg-warning text-white'
                         : 'bg-primary-100 text-primary-700'
@@ -120,21 +96,36 @@ export default function SafetyAlertPanel({
                       {alert.blocking && ' · 阻断'}
                     </span>
                   </div>
-                  
+
                   <p className={`font-semibold ${config.color} mb-1`}>
                     {alert.message}
                   </p>
-                  
+
                   <p className="text-sm text-slate-700">
                     <span className="font-medium">建议: </span>
                     {alert.suggestion}
                   </p>
+
+                  {alert.riskLevel === 'warning' && (
+                    <label className="mt-3 flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isAcknowledged}
+                        onChange={() => onAcknowledge(alert.ruleId)}
+                        className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                      />
+                      <span className={isAcknowledged ? 'text-slate-500' : 'font-medium'}>
+                        已阅读并理解
+                      </span>
+                    </label>
+                  )}
                 </div>
 
-                {!alert.blocking && (
+                {alert.riskLevel === 'info' && (
                   <button
-                    onClick={() => dismissAlert(alert.id)}
+                    onClick={() => onDismiss(alert.ruleId)}
                     className={`flex-shrink-0 p-1 rounded-lg ${config.color} hover:bg-white/50 transition-colors`}
+                    aria-label="忽略提示"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -153,7 +144,7 @@ export function SafetyAlertBadge({ count, riskLevel }: { count: number; riskLeve
   if (count === 0) return null
 
   const config = riskConfig[riskLevel]
-  
+
   return (
     <motion.div
       initial={{ scale: 0 }}

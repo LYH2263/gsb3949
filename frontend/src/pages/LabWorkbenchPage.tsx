@@ -5,6 +5,8 @@ import InstrumentPanel from '../features/instruments/InstrumentPanel'
 import ReagentPanel from '../features/reagents/ReagentPanel'
 import StepGuide from '../features/experiment-flow/StepGuide'
 import { useExperimentFlow } from '../features/experiment-flow/useExperimentFlow'
+import SafetyAlertPanel from '../features/safety/SafetyAlertPanel'
+import { useSafetyGuard, hasHydrogenSource } from '../features/safety/useSafetyGuard'
 import { useBackendExperimentRecorder } from '../features/records/useBackendExperimentRecorder'
 import { experimentStepsMap } from '../data/experimentSteps'
 import type { Instrument } from '../types/instrument'
@@ -50,6 +52,12 @@ export default function LabWorkbenchPage() {
     steps: experimentSteps,
     selectedInstruments: selectedInstruments.map((i) => i.id),
     selectedReagents: selectedReagents.map((r) => r.id),
+  })
+
+  const safety = useSafetyGuard({
+    selectedInstruments: selectedInstruments.map((i) => i.id),
+    selectedReagents: selectedReagents.map((r) => r.id),
+    currentStepId: isExperimentRunning ? steps[currentStepIndex]?.id : undefined,
   })
 
   const {
@@ -155,6 +163,7 @@ export default function LabWorkbenchPage() {
     setSelectedReagents([])
     setIsExperimentRunning(false)
     resetFlow()
+    safety.resetSafety()
     addToast({
       type: 'info',
       title: '已重置',
@@ -167,6 +176,17 @@ export default function LabWorkbenchPage() {
     if (!step) return
 
     if (!validateStep()) {
+      return
+    }
+
+    if (!safety.canProceed) {
+      addToast({
+        type: 'warning',
+        title: safety.hasDanger ? '存在危险操作' : '请先确认安全警告',
+        message: safety.hasDanger
+          ? '请按照安全建议处理危险操作后再继续'
+          : '请勾选警告中的「已阅读并理解」后再继续',
+      })
       return
     }
 
@@ -358,6 +378,39 @@ export default function LabWorkbenchPage() {
                       </div>
                     )}
 
+                    {isExperimentRunning &&
+                      hasHydrogenSource(selectedReagents.map((r) => r.id)) && (
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                          <h4 className="text-sm font-semibold text-slate-700 mb-1">点燃 / 验纯操作</h4>
+                          <p className="text-xs text-slate-500 mb-3">
+                            反应产生氢气，点燃前必须先验纯；未验纯直接点燃将被安全预警阻断
+                          </p>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <button
+                              onClick={safety.verifyPurity}
+                              disabled={safety.purityVerified}
+                              className="px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              验纯
+                            </button>
+                            <button
+                              onClick={safety.attemptIgnition}
+                              disabled={safety.ignited}
+                              className="px-4 py-2 rounded-lg bg-danger text-white text-sm font-medium hover:bg-danger/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              点燃
+                            </button>
+                            <span className="text-sm text-slate-600">
+                              {safety.ignited
+                                ? '氢气纯净，已安静燃烧（淡蓝色火焰）'
+                                : safety.purityVerified
+                                ? '验纯通过，可以点燃'
+                                : '尚未验纯，严禁直接点燃'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                     {isComplete && (
                       <div className="mt-6 p-4 bg-success-light rounded-xl border border-success">
                         <p className="text-success-dark font-medium">实验完成</p>
@@ -371,13 +424,20 @@ export default function LabWorkbenchPage() {
           </div>
 
           <div className="lg:col-span-4 space-y-6">
+            <SafetyAlertPanel
+              alerts={safety.alerts}
+              acknowledgedIds={safety.acknowledgedIds}
+              onAcknowledge={safety.acknowledgeAlert}
+              onDismiss={safety.dismissAlert}
+            />
+
             {isExperimentRunning && (
               <StepGuide
                 steps={steps}
                 currentStepIndex={currentStepIndex}
                 onNext={handleNextStep}
                 onPrev={prevStep}
-                canProceed={canProceed}
+                canProceed={canProceed && safety.canProceed}
                 canGoBack={canGoBack}
                 isComplete={isComplete}
               />
