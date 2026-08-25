@@ -1,0 +1,41 @@
+{
+  "name": "氧气制备",
+  "category": "gas-preparation",
+  "difficulty": "medium",
+  "description": "用过氧化氢溶液在二氧化锰催化下制备氧气",
+  "principle_equation": "2H₂O₂ = 2H₂O + O₂↑ (MnO₂催化)",
+  "principle_explanation": "过氧化氢在二氧化锰的催化作用下分解生成水和氧气。二氧化锰作为催化剂，能加速反应速率但本身不参与反应。",
+  "instruments": [
+    {"id": "conical-flask", "name": "锥形瓶", "category": "container"},
+    {"id": "delivery-tube", "name": "导气管", "category": "auxiliary"},
+    {"id": "gas-collecting-bottle", "name": "集气瓶", "category": "container"}
+  ],
+  "reagents": [
+    {"id": "h2o2-solution", "name": "过氧化氢溶液", "formula": "H₂O₂", "category": "oxide"},
+    {"id": "mno2", "name": "二氧化锰", "formula": "MnO₂", "category": "catalyst"}
+  ],
+  "steps": [
+    {"order": 1, "title": "准备装置", "description": "组装气体发生装置，检查气密性", "safety_tips": ["确保装置气密性良好"]},
+    {"order": 2, "title": "加入催化剂", "description": "向锥形瓶中加入少量二氧化锰", "safety_tips": ["MnO₂为黑色粉末，避免吸入"]},
+    {"order": 3, "title": "加入反应液", "description": "通过漏斗向锥形瓶中加入过氧化氢溶液", "safety_tips": ["H₂O₂具有氧化性，避免接触皮肤"]},
+    {"order": 4, "title": "收集气体", "description": "用排水法或向上排空气法收集氧气", "safety_tips": ["氧气助燃，远离火源"]},
+    {"order": 5, "title": "验满", "description": "用带火星的木条放在瓶口，观察是否复燃", "safety_tips": ["木条应缓慢靠近瓶口"]}
+  ],
+  "reactions": [
+    {
+      "reactants": ["h2o2-solution", "mno2"],
+      "conditions": {"needHeat": false, "catalyst": "MnO₂"},
+      "products": [{"name": "水", "formula": "H₂O", "state": "liquid"}, {"name": "氧气", "formula": "O₂", "state": "gas"}],
+      "equation": "2H₂O₂ = 2H₂O + O₂↑",
+      "phenomena": [
+        {"type": "gas_generation", "description": "产生大量气泡（氧气）", "visual": {"type": "bubbles", "density": "very_high"}},
+        {"type": "catalyst", "description": "二氧化锰保持黑色不变", "visual": {"type": "solid_unchanged"}}
+      ],
+      "duration": 8
+    }
+  ],
+  "safety_rules": [
+    {"trigger": "high_concentration", "riskLevel": "warning", "message": "过氧化氢浓度过高反应会过于剧烈，请使用3%溶液", "blocking": false},
+    {"trigger": "open_flame", "riskLevel": "danger", "message": "氧气助燃，实验区域严禁明火", "blocking": true}
+  ]
+}

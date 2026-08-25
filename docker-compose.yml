@@ -1,0 +1,59 @@
+services:
+  # Frontend service
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8001
+    ports:
+      - "3101:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - chemistry-lab-network
+
+  # Backend service
+  backend:
+    build: ./backend
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chemistry_lab
+      - SECRET_KEY=your-secret-key-change-this-in-production
+      - DEBUG=true
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - chemistry-lab-network
+    volumes:
+      - ./backend:/app
+
+  # Database service
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=chemistry_lab
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - chemistry-lab-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  chemistry-lab-network:
+    driver: bridge

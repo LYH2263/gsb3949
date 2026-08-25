@@ -1,0 +1,41 @@
+{
+  "name": "金属与酸反应",
+  "category": "metal-acid",
+  "difficulty": "medium",
+  "description": "探究活泼金属与酸的反应，观察氢气生成",
+  "principle_equation": "Zn + H₂SO₄ = ZnSO₄ + H₂↑",
+  "principle_explanation": "锌是活泼金属，能与稀硫酸发生置换反应，生成硫酸锌和氢气。反应过程中有气泡产生，金属逐渐溶解。",
+  "instruments": [
+    {"id": "test-tube", "name": "试管", "category": "container"},
+    {"id": "test-tube-holder", "name": "试管夹", "category": "auxiliary"},
+    {"id": "dropper", "name": "胶头滴管", "category": "auxiliary"}
+  ],
+  "reagents": [
+    {"id": "h2so4-dilute", "name": "稀硫酸", "formula": "H₂SO₄", "category": "acid"},
+    {"id": "zinc-granules", "name": "锌粒", "formula": "Zn", "category": "metal"}
+  ],
+  "steps": [
+    {"order": 1, "title": "准备器材", "description": "取一支干燥的试管，用试管夹夹持", "safety_tips": ["试管外壁应干燥"]},
+    {"order": 2, "title": "加入锌粒", "description": "用药匙取2-3粒锌粒放入试管中", "safety_tips": ["锌粒应平铺试管底部"]},
+    {"order": 3, "title": "加入酸液", "description": "用胶头滴管向试管中加入3-5mL稀硫酸", "safety_tips": ["酸液具有腐蚀性，小心操作"]},
+    {"order": 4, "title": "观察现象", "description": "观察气泡产生，记录金属溶解情况", "safety_tips": ["产生的气体为氢气，注意通风"]},
+    {"order": 5, "title": "检验气体", "description": "用燃着的木条靠近试管口，听声音判断", "safety_tips": ["氢气易燃，远离明火"]}
+  ],
+  "reactions": [
+    {
+      "reactants": ["zinc-granules", "h2so4-dilute"],
+      "conditions": {"needHeat": false},
+      "products": [{"name": "硫酸锌", "formula": "ZnSO₄", "state": "liquid"}, {"name": "氢气", "formula": "H₂", "state": "gas"}],
+      "equation": "Zn + H₂SO₄ = ZnSO₄ + H₂↑",
+      "phenomena": [
+        {"type": "gas_generation", "description": "产生大量气泡（氢气）", "visual": {"type": "bubbles", "density": "high"}},
+        {"type": "dissolution", "description": "锌粒逐渐溶解变小", "visual": {"type": "solid_dissolve"}}
+      ],
+      "duration": 10
+    }
+  ],
+  "safety_rules": [
+    {"trigger": "direct_flame", "riskLevel": "danger", "message": "氢气与空气混合遇火可能爆炸，检验时试管口不能对人", "blocking": true},
+    {"trigger": "excess_acid", "riskLevel": "warning", "message": "加入酸液应适量，避免剧烈反应", "blocking": false}
+  ]
+}

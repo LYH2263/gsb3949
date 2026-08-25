@@ -1,0 +1,43 @@
+{
+  "name": "酸碱中和反应",
+  "category": "acid-base",
+  "difficulty": "easy",
+  "description": "探究酸和碱的中和反应，观察酚酞指示剂的颜色变化",
+  "principle_equation": "HCl + NaOH = NaCl + H₂O",
+  "principle_explanation": "酸中的氢离子(H⁺)与碱中的氢氧根离子(OH⁻)结合生成水(H₂O)，同时生成盐(NaCl)。酚酞在碱性溶液中显红色，中和后溶液变为中性，酚酞变为无色。",
+  "instruments": [
+    {"id": "beaker", "name": "烧杯", "category": "container"},
+    {"id": "dropper", "name": "胶头滴管", "category": "auxiliary"},
+    {"id": "glass-rod", "name": "玻璃棒", "category": "auxiliary"}
+  ],
+  "reagents": [
+    {"id": "hcl-dilute", "name": "稀盐酸", "formula": "HCl", "category": "acid"},
+    {"id": "naoh-solution", "name": "氢氧化钠溶液", "formula": "NaOH", "category": "base"},
+    {"id": "phenolphthalein", "name": "酚酞指示剂", "category": "indicator"}
+  ],
+  "steps": [
+    {"order": 1, "title": "准备器材", "description": "取一只干净的烧杯，放在实验台上", "safety_tips": ["确认烧杯干燥洁净"]},
+    {"order": 2, "title": "加入碱液", "description": "用量筒量取10mL氢氧化钠溶液，倒入烧杯中", "safety_tips": ["NaOH有腐蚀性，避免皮肤接触"]},
+    {"order": 3, "title": "滴加指示剂", "description": "用胶头滴管向烧杯中滴入2-3滴酚酞指示剂，观察溶液变为红色", "safety_tips": []},
+    {"order": 4, "title": "逐滴加入酸液", "description": "用胶头滴管逐滴加入稀盐酸，同时用玻璃棒搅拌", "safety_tips": ["逐滴加入，边加边搅拌"]},
+    {"order": 5, "title": "观察现象", "description": "观察溶液颜色由红色逐渐变为无色，记录现象", "safety_tips": []},
+    {"order": 6, "title": "记录结果", "description": "记录实验数据和结论", "safety_tips": ["清洗器材，整理实验台"]}
+  ],
+  "reactions": [
+    {
+      "reactants": ["hcl-dilute", "naoh-solution"],
+      "conditions": {"needHeat": false},
+      "products": [{"name": "氯化钠", "formula": "NaCl", "state": "liquid"}, {"name": "水", "formula": "H₂O", "state": "liquid"}],
+      "equation": "HCl + NaOH = NaCl + H₂O",
+      "phenomena": [
+        {"type": "color_change", "description": "酚酞指示剂由红色变为无色", "visual": {"color": "transparent", "duration": 3}},
+        {"type": "temperature_change", "description": "溶液温度略有升高（放热反应）", "visual": {"intensity": 0.3}}
+      ],
+      "duration": 5
+    }
+  ],
+  "safety_rules": [
+    {"trigger": "wrong_order", "riskLevel": "warning", "message": "应先加碱液再加指示剂，最后加酸液", "blocking": false},
+    {"trigger": "excess_reagent", "riskLevel": "info", "message": "酸液应逐滴加入，避免过量", "blocking": false}
+  ]
+}
